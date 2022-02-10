@@ -40,18 +40,19 @@ type Client struct {
 	wsServer *WsServer
 	send     chan []byte
 	rooms    map[*Room]bool
+	Name     string `json:"name"` // dùng để đặt tên cho client
 }
 
-func newClient(conn *websocket.Conn, wsServer *WsServer) *Client {
+func newClient(conn *websocket.Conn, wsServer *WsServer, name string) *Client {
 	return &Client{
 		conn:     conn,
 		wsServer: wsServer,
 		send:     make(chan []byte, 256),
 		rooms:    make(map[*Room]bool),
+		Name:     name,
 	}
 
 }
-
 func (client *Client) readPump() {
 	defer func() {
 		client.disconnect()
@@ -70,8 +71,9 @@ func (client *Client) readPump() {
 			}
 			break
 		}
-
-		client.wsServer.broadcast <- jsonMessage
+		/*client.wsServer.broadcast <- jsonMessage*/
+		//sử dụng các method mới
+		client.handlerNewMessage(jsonMessage)
 	}
 
 }
@@ -87,7 +89,7 @@ func (client *Client) writePump() {
 		case message, ok := <-client.send:
 			client.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
-				// The WsServer closed the channel.
+				//WsServer đã đóng chanel.
 				client.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
@@ -98,7 +100,7 @@ func (client *Client) writePump() {
 			}
 			w.Write(message)
 
-			// Attach queued chat messages to the current websocket message.
+			// Đính kèm tin nhắn trò chuyện đã xếp hàng đợi vào tin nhắn websocket hiện tại.
 			n := len(client.send)
 			for i := 0; i < n; i++ {
 				w.Write(newline)
@@ -123,16 +125,22 @@ func (client *Client) disconnect() {
 	client.conn.Close()
 }
 
-// ServeWs handles websocket requests from clients requests.
+//ServeWs xử lý các yêu cầu websocket từ các yêu cầu của khách hàng.
 func ServeWs(wsServer *WsServer, w http.ResponseWriter, r *http.Request) {
 
+	name, ok := r.URL.Query()["name"]
+	//check Query name
+	if !ok || len(name[0]) < 1 {
+		log.Printf("URL Param bị thiếu")
+		return
+	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	client := newClient(conn, wsServer)
+	client := newClient(conn, wsServer, name[0])
 
 	go client.writePump()
 	go client.readPump()
@@ -148,8 +156,10 @@ func (client *Client) disconect() {
 
 //method giải mã Json message sau đó xử lý trực tiếp hoặc
 // chuyển nó đến trình xử lý
+
 func (client *Client) handlerNewMessage(jsonMessage []byte) {
 	var message Message
+
 	//Unmarshal phân tích cú pháp dữ liệu được mã hóa JSON và lưu trữ kết quả trong giá trị được trỏ tới bởi v.
 	//Nếu v là nil hoặc không phải là một con trỏ,Unmarshal trả về lỗi InvalidUnmarshalError
 	if err := json.Unmarshal(jsonMessage, &message); err != nil {
@@ -194,4 +204,7 @@ func (client *Client) handlerLeaveRoomMessage(message Message) {
 		delete(client.rooms, room)
 	}
 	room.unregister <- client
+}
+func (client *Client) GetName() string {
+	return client.Name
 }

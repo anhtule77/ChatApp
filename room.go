@@ -1,7 +1,11 @@
 package main
 
+import "fmt"
+
+const welcomeMessage = "%s đã tham gia phòng"
+
 type Room struct {
-	name       string
+	Name       string `json:"name"`
 	clients    map[*Client]bool
 	register   chan *Client
 	unregister chan *Client
@@ -11,7 +15,7 @@ type Room struct {
 // hàm tạo ra một room mới
 func NewRoom(name string) *Room {
 	return &Room{
-		name:       name,
+		Name:       name,
 		clients:    make(map[*Client]bool),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
@@ -33,13 +37,21 @@ func (room *Room) RunRoom() {
 	}
 }
 
+//gọi method notify khi người dùng registe
 func (room *Room) registerCLientInRoom(client *Client) {
+	// bằng cách gửi tin nhắn trước,người dùng mới sẽ kh thấy tn của chính họ
 	room.notifyClientJoin(client)
 	room.clients[client] = true
 }
 
+//gửi thông báo người dùng mới tham gia, để những người trong room biết
 func (room *Room) notifyClientJoin(client *Client) {
-
+	message := &Message{
+		Action:  SendMessageAction,
+		Target:  room.Name,
+		Message: fmt.Sprintf(welcomeMessage, client.GetName()),
+	}
+	room.broadcastToClientsInRoom(message.encode())
 }
 
 func (room *Room) unregisterClientInRoom(client *Client) {
@@ -52,4 +64,8 @@ func (room *Room) broadcastToClientsInRoom(message []byte) {
 	for client := range room.clients {
 		client.send <- message
 	}
+}
+
+func (room *Room) GetName() string {
+	return room.Name
 }
