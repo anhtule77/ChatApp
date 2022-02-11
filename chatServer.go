@@ -62,8 +62,18 @@ func (server *WsServer) findRoomByName(name string) *Room {
 	}
 	return foundRoom
 }
-func (server *WsServer) createRoom(name string) *Room {
-	room := NewRoom(name)
+func (server *WsServer) findRoomByID(id string) *Room {
+	var foundRoom *Room
+	for room := range server.rooms {
+		if room.GetID() == id {
+			foundRoom = room
+			break
+		}
+	}
+	return foundRoom
+}
+func (server *WsServer) createRoom(id, name string) *Room {
+	room := NewRoom(id, name)
 	go room.RunRoom()
 	server.rooms[room] = true
 

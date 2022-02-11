@@ -3,25 +3,30 @@ var app = new Vue({
     data: {
         ws: null,
         serverUrl: "ws://localhost:8080/ws",
-        roomInput: null, // sử dụng để join các room mới
-        rooms: [], // theo dõi các room đã tham gia
+        roomInput: null,// sử dụng để join các room mới
+        rooms: [],// theo dõi các room đã tham gia
         user: { // dành cho user data, như name
-            name:""
-        }
+            name: ""
+        },
+        users: []
+    },
+    mounted: function () {
+
     },
     methods: {
-        connect(){
+        connect() {
             this.connectToWebsocket();
         },
         connectToWebsocket() {
             // truyền tham số name khi connect
-            this.ws = new WebSocket( this.serverUrl + "?name=" + this.user.name );
+            this.ws = new WebSocket(this.serverUrl + "?name=" + this.user.name);
             this.ws.addEventListener('open', (event) => { this.onWebsocketOpen(event) });
             this.ws.addEventListener('message', (event) => { this.handleNewMessage(event) });
         },
         onWebsocketOpen() {
             console.log("connected to WS!");
         },
+
         handleNewMessage(event) {
             let data = event.data;
             data = data.split(/\r?\n/);
@@ -29,33 +34,85 @@ var app = new Vue({
             for (let i = 0; i < data.length; i++) {
                 let msg = JSON.parse(data[i]);
                 //hiển thị thông báo vào đúng room
-                const room = this.findRoom(msg.target)
-                if(typeof room != "undefined"){
-                    room.message.push(msg);
+                switch (msg.action) {
+                    case "send-message":
+                        this.handleChatMessage(msg);
+                        break;
+                    case "user-join":
+                        this.handleUserJoined(msg);
+                        break;
+                    case "user-left":
+                        this.handleUserLeft(msg);
+                        break;
+                    case "room-joined":
+                        this.handleRoomJoined(msg);
+                        break;
+                    default:
+                        break;
                 }
 
             }
         },
+        handleChatMessage(msg) {
+            const room = this.findRoom(msg.target);
+            if (typeof room !== "undefined") {
+                room.messages.push(msg);
+            }
+        },
+        handleUserJoined(msg) {
+            this.users.push(msg.sender);
+        },
+        handleUserLeft(msg) {
+            for (let i = 0; i < this.users.length; i++) {
+                if (this.users[i].id == msg.sender.id) {
+                    this.users.splice(i, 1);
+                }
+            }
+        },
+        handleRoomJoined(msg) {
+            room = msg.target;
+            room.name = room.private ? msg.sender.name : room.name;
+            room["messages"] = [];
+            this.rooms.push(room);
+        },
+        // gửi tin nhắn đến đúng room
         sendMessage(room) {
-            // gửi tin nhắn đến đúng room
-            if(room.newMessage !== "") {
-                room.ws.send(JSON.stringify({
-                    action: room.sendMessage(),
+            if (room.newMessage !== "") {
+                this.ws.send(JSON.stringify({
+                    action: 'send-message',
                     message: room.newMessage,
-                    target: room.name
+                    target: {
+                        id: room.id,
+                        name: room.name
+                    }
                 }));
                 room.newMessage = "";
             }
         },
-
-        findRoom(roomName) {
-            for (let i = 0;i < this.rooms.length;i++){
-                if (this.rooms[i].name = roomName){
+        findRoom(roomId) {
+            for (let i = 0; i < this.rooms.length; i++) {
+                if (this.rooms[i].id === roomId) {
                     return this.rooms[i];
                 }
             }
-            return undefined;
         },
+        joinRoom() {
+            //Chuyển đổi giá trị JavaScript thành chuỗi ký hiệu đối tượng JavaScript (JSON).
+            this.ws.send(JSON.stringify({ action: 'join-room', message: this.roomInput }));
+            this.roomInput = "";
+        },
+        leaveRoom(room) {
+            this.ws.send(JSON.stringify({ action: 'leave-room', message: room.id }));
 
+            for (let i = 0; i < this.rooms.length; i++) {
+                if (this.rooms[i].id === room.id) {
+                    this.rooms.splice(i, 1);
+                    break;
+                }
+            }
+        },
+        joinPrivateRoom(room) {
+            this.ws.send(JSON.stringify({ action: 'join-room-private', message: room.id }));
+        }
     }
 })

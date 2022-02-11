@@ -5,6 +5,7 @@ import "fmt"
 const welcomeMessage = "%s đã tham gia phòng"
 
 type Room struct {
+	ID         string `json:"id"`
 	Name       string `json:"name"`
 	clients    map[*Client]bool
 	register   chan *Client
@@ -13,8 +14,9 @@ type Room struct {
 }
 
 // hàm tạo ra một room mới
-func NewRoom(name string) *Room {
+func NewRoom(id, name string) *Room {
 	return &Room{
+		ID:         id,
 		Name:       name,
 		clients:    make(map[*Client]bool),
 		register:   make(chan *Client),
@@ -47,8 +49,11 @@ func (room *Room) registerCLientInRoom(client *Client) {
 //gửi thông báo người dùng mới tham gia, để những người trong room biết
 func (room *Room) notifyClientJoin(client *Client) {
 	message := &Message{
-		Action:  SendMessageAction,
-		Target:  room.Name,
+		Action: SendMessageAction,
+		Target: Target{
+			Id:   room.ID,
+			Name: room.Name,
+		},
 		Message: fmt.Sprintf(welcomeMessage, client.GetName()),
 	}
 	room.broadcastToClientsInRoom(message.encode())
@@ -68,4 +73,8 @@ func (room *Room) broadcastToClientsInRoom(message []byte) {
 
 func (room *Room) GetName() string {
 	return room.Name
+}
+
+func (room *Room) GetID() string {
+	return room.ID
 }

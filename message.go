@@ -10,10 +10,10 @@ const JoinRoomAction = "join-room"
 const LeaveRoomAction = "leave-room"
 
 type Message struct {
-	Action  string  `json:"action"`
-	Message string  `json:"message"`
-	Target  string  `json:"target"`
-	Sender  *Client `json:"sender"`
+	Action  string `json:"action"`
+	Message string `json:"message"`
+	Target  Target `json:"target"`
+	Sender  Client `json:"sender"`
 }
 
 // {"action": "asdasd", "message": "asdasd",  "sender": {}}

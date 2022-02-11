@@ -43,6 +43,11 @@ type Client struct {
 	Name     string `json:"name"` // dùng để đặt tên cho client
 }
 
+type Target struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
 func newClient(conn *websocket.Conn, wsServer *WsServer, name string) *Client {
 	return &Client{
 		conn:     conn,
@@ -51,8 +56,8 @@ func newClient(conn *websocket.Conn, wsServer *WsServer, name string) *Client {
 		rooms:    make(map[*Room]bool),
 		Name:     name,
 	}
-
 }
+
 func (client *Client) readPump() {
 	defer func() {
 		client.disconnect()
@@ -147,6 +152,7 @@ func ServeWs(wsServer *WsServer, w http.ResponseWriter, r *http.Request) {
 
 	wsServer.register <- client
 }
+
 func (client *Client) disconect() {
 	client.wsServer.unregister <- client
 	for room := range client.rooms {
@@ -163,20 +169,23 @@ func (client *Client) handlerNewMessage(jsonMessage []byte) {
 	//Unmarshal phân tích cú pháp dữ liệu được mã hóa JSON và lưu trữ kết quả trong giá trị được trỏ tới bởi v.
 	//Nếu v là nil hoặc không phải là một con trỏ,Unmarshal trả về lỗi InvalidUnmarshalError
 	if err := json.Unmarshal(jsonMessage, &message); err != nil {
-		log.Printf("Lỗi Json không quản lý %s", err)
+		log.Printf("Json error do not manager %s", err)
+		log.Printf("%s", string(jsonMessage))
 	}
 
 	// gán đối tượng client là người gửi tin nhắn
-	message.Sender = client
+	message.Sender = *client
 
 	switch message.Action {
 	case SendMessageAction:
+		log.Printf("%s", message.Message)
 		// action này sẽ gửi tin nhắn đến một phòng
 		// room nào thì sẽ tùy thuộc vào message Target
-		roomName := message.Target
+		roomId := message.Target.Id
 		//sử dụng method chatServer để tìm room, nếu tìm thấy,phát tin
-		if room := client.wsServer.findRoomByName(roomName); room != nil {
+		if room := client.wsServer.findRoomByID(roomId); room != nil {
 			room.broadcast <- &message
+			log.Printf("room: %s", room.Name)
 		}
 	case JoinRoomAction:
 		client.handleJoinRoomMessage(message)
@@ -189,10 +198,12 @@ func (client *Client) handlerNewMessage(jsonMessage []byte) {
 // vì hiện tại đang gửi các đối tượng Message thay vì các đối tượng []byte
 
 func (client *Client) handleJoinRoomMessage(message Message) {
-	roomName := message.Message
-	room := client.wsServer.findRoomByName(roomName)
+	log.Printf("join> %s", string(message.Message))
+	roomName := message.Target.Name
+	roomId := message.Target.Id
+	room := client.wsServer.findRoomByID(roomId)
 	if room == nil {
-		room = client.wsServer.createRoom(roomName)
+		room = client.wsServer.createRoom(roomId, roomName)
 	}
 	client.rooms[room] = true
 	room.register <- client
@@ -205,6 +216,7 @@ func (client *Client) handlerLeaveRoomMessage(message Message) {
 	}
 	room.unregister <- client
 }
+
 func (client *Client) GetName() string {
 	return client.Name
 }
